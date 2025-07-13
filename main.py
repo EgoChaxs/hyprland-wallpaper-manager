@@ -20,7 +20,7 @@ from wallpaper_logic import (
     start_slideshow,
     stop_slideshow,
     _slideshow_thread,
-)
+)sqws
 
 
 def main():
