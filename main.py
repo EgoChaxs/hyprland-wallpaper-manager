@@ -2,12 +2,11 @@ import argparse
 import sys
 import time
 
-from config import initialise_json, _read_config
-
+from config import initialise_json, _read_config, _get_config_path, _write_config
 from source_management import (
-    _add_managed_source, 
-    _remove_managed_source, 
-    list_sources, 
+    _add_managed_source,
+    _remove_managed_source,
+    list_sources,
     clean_invalid_sources
 )
 from wallpaper_logic import (
@@ -20,15 +19,22 @@ from wallpaper_logic import (
     start_slideshow,
     stop_slideshow,
     _slideshow_thread,
-)sqws
+)
 
 
 def main():
-    #without config file program is doomed.
+    """
+    Main entry point for the Hyprland Wallpaper CLI application.
+    Initializes configuration, parses command-line arguments, and
+    dispatches to the appropriate wallpaper management functions.
+    """
+
+    # No config file, Program doomed.
     initialise_json()
 
     parser = argparse.ArgumentParser(
-        prog='wallpaper'
+        prog='wallpaper',
+        description='A command-line tool to manage wallpapers for Hyprland.'
     )
 
     subparsers = parser.add_subparsers(
@@ -41,7 +47,6 @@ def main():
         'set',
         help='Set a specific wallpaper from a file path.'
     )
-    
     set_parser.add_argument(
         'path',
         type=str,
@@ -49,97 +54,199 @@ def main():
     )
 
     # --- Command: set-next ---
-    set_parser = subparsers.add_parser(
+    set_next_parser = subparsers.add_parser(
         'set-next',
         help='Set the next wallpaper in sequence.'
     )
 
     # --- Command: set-prev ---
-    set_parser = subparsers.add_parser(
+    set_prev_parser = subparsers.add_parser(
         'set-prev',
         help='Set the previous wallpaper in sequence.'
     )
 
     # --- Command: set-rand ---
-    set_parser = subparsers.add_parser(
+    set_rand_parser = subparsers.add_parser(
         'set-rand',
         help='Set a random wallpaper from the available sources.'
     )
 
-    # --- Command: add-wallpaper ---
-    set_parser = subparsers.add_parser(
-        'add-wallpaper',
-        help='Adds a wallpaper to the available options.'
+    # --- Command: add-source ---
+    add_source_parser = subparsers.add_parser(
+        'add-source',
+        help='Adds a directory or file path to managed wallpaper sources.'
     )
-
-    set_parser.add_argument(
+    add_source_parser.add_argument(
         'path',
         type=str,
-        help='The absolute path to the wallpaper image file.'
+        help='The absolute path to the directory or file to add.'
     )
 
-    # --- Command: remove-wallpaper ---
-    set_parser = subparsers.add_parser(
-        'remove-wallpaper',
-        help='Removes a wallpaper from the available options.'
+    # --- Command: remove-source ---
+    remove_source_parser = subparsers.add_parser(
+        'remove-source',
+        help='Removes a directory or file path from managed wallpaper sources.'
     )
-
-    set_parser.add_argument(
+    remove_source_parser.add_argument(
         'path',
         type=str,
-        help='The absolute path to the wallpaper image file.'
+        help='The absolute path to the directory or file to remove.'
     )
 
     # --- Command: get-curr ---
-    set_parser = subparsers.add_parser(
+    get_curr_parser = subparsers.add_parser(
         'get-curr',
         help='Gets current wallpaper path.'
     )
 
     # --- Command: list-sources ---
-    set_parser = subparsers.add_parser(
+    list_sources_parser = subparsers.add_parser(
         'list-sources',
-        help='Lists every available wallpaper.'
+        help='Lists all currently managed wallpaper sources.'
     )
 
     # --- Command: clean-sources ---
-    set_parser = subparsers.add_parser(
+    clean_sources_parser = subparsers.add_parser(
         'clean-sources',
-        help='Checks if there are faulty sources and removes them.'
+        help='Removes all non-existent paths from managed sources.'
+    )
+
+    # --- Parent command: slideshow ---
+    slideshow_parser = subparsers.add_parser(
+        'slideshow',
+        help='Control the automatic wallpaper slideshow.'
+    )
+    slideshow_subparsers = slideshow_parser.add_subparsers(
+        dest='slideshow_command',
+        help='Commands for slideshow control.'
+    )
+
+    # --- Command: slideshow on ---
+    slideshow_on_parser = slideshow_subparsers.add_parser(
+        'on',
+        help='Activate the slideshow. It will start with the next wallpaper rotation.'
+    )
+
+    # --- Command: slideshow off ---
+    slideshow_off_parser = slideshow_subparsers.add_parser(
+        'off',
+        help='Deactivate the slideshow. It will stop at the end of the current rotation.'
+    )
+
+    # --- Command: slideshow interval ---
+    slideshow_interval_parser = slideshow_subparsers.add_parser(
+        'interval',
+        help='Set the slideshow interval in seconds.'
+    )
+    slideshow_interval_parser.add_argument(
+        'seconds',
+        type=int,
+        help='The interval in seconds (e.g., 30 for 30 seconds, 600 for 10 minutes).'
+    )
+
+    # --- Command: slideshow order ---
+    slideshow_order_parser = slideshow_subparsers.add_parser(
+        'order',
+        help='Set the wallpaper rotation order for the slideshow.'
+    )
+    slideshow_order_group = slideshow_order_parser.add_mutually_exclusive_group(required=True)
+    slideshow_order_group.add_argument(
+        '--random',
+        action='store_true',
+        help='Set slideshow to pick wallpapers in random order.'
+    )
+    slideshow_order_group.add_argument(
+        '--sequential',
+        action='store_true',
+        help='Set slideshow to pick wallpapers in sequential order.'
+    )
+
+    # --- Command: slideshow start ---
+    slideshow_start_parser = slideshow_subparsers.add_parser(
+        'start',
+        help='Immediately start the slideshow thread. Checks if slideshow is active in config.'
+    )
+
+    # --- Command: slideshow stop ---
+    slideshow_stop_parser = slideshow_subparsers.add_parser(
+        'stop',
+        help='Immediately stop the running slideshow thread.'
     )
 
 
-    # Beautiful 'if' section :D
-
+    # --- Parse the arguments ---
     args = parser.parse_args()
 
+    # Beautiful if section :D
     if args.command == 'set':
         set_wallpaper(args.path)
 
-    if args.command == 'set-next':
+    elif args.command == 'set-next':
         set_next_wallpaper()
 
-    if args.command == 'set-prev':
+    elif args.command == 'set-prev':
         set_previous_wallpaper()
 
-    if args.command == 'set-rand':
+    elif args.command == 'set-rand':
         set_random_wallpaper()
 
-    if args.command == 'add-wallpaper':
-        _add_managed_source()
+    elif args.command == 'add-source':
+        _add_managed_source(args.path)
 
-    if args.command == 'remove-wallpaper':
-        _remove_managed_source()
+    elif args.command == 'remove-source':
+        _remove_managed_source(args.path)
 
-    if args.command == 'get-curr':
+    elif args.command == 'get-curr':
         print(_get_current_wallpaper_path())
 
-    if args.command == 'list-sources':
-        for src in list_sources():
-            print(src)
+    elif args.command == 'list-sources':
+        sources = list_sources()
+        if sources:
+            sys.stdout.write("Managed wallpaper sources:\n")
+            for i, source in enumerate(sources):
+                sys.stdout.write(f"  {i+1}. {source}\n")
+        else:
+            sys.stdout.write("No wallpaper sources currently managed. Use 'add-source <path>' to add some.\n")
 
-    if args.command == 'clean-sources':
+    elif args.command == 'clean-sources':
         clean_invalid_sources()
+
+    # slideshow section
+    elif args.command == 'slideshow':
+        if args.slideshow_command == 'on':
+            toggle_slideshow(enable=True)
+            start_slideshow()
+
+        elif args.slideshow_command == 'off':
+            toggle_slideshow(enable=False)
+            stop_slideshow()
+
+        elif args.slideshow_command == 'interval':
+            toggle_slideshow(interval=args.seconds)
+            
+            if _slideshow_thread and _slideshow_thread.is_alive():
+                sys.stdout.write("Note: If slideshow is running, restart it ('slideshow stop' then 'slideshow start') for the new interval to take effect.\n")
+
+        elif args.slideshow_command == 'order':
+            if args.random:
+                toggle_slideshow(random_order=True)
+            elif args.sequential:
+                toggle_slideshow(random_order=False)
+
+            if _slideshow_thread and _slideshow_thread.is_alive():
+                sys.stdout.write("Note: If slideshow is running, restart it ('slideshow stop' then 'slideshow start') for the new order to take effect.\n")
+
+        elif args.slideshow_command == 'start':
+            start_slideshow()
+
+        elif args.slideshow_command == 'stop':
+            stop_slideshow()
+
+        else:
+            slideshow_parser.print_help()
+    else:
+        parser.print_help()
+
 
 if __name__ == "__main__":
     main()

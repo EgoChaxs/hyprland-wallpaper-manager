@@ -206,47 +206,52 @@ def start_slideshow() -> None:
     sys.stderr.write("Slideshow thread successfully started in background.\n")
 
 
-def  toggle_slideshow(enable: bool, interval: int = None) -> None:
+def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bool = None) -> None:
     """
-    Purpose: Toggles the slideshow active state and optionally sets its interval.
+    Purpose:
+        Manages all slideshow configuration settings (active state, interval, and order).
+        Only settings for which a non-None argument is provided will be updated.
 
     Arguments:
-        enable (bool): True to activate slideshow, False to deactivate.
-        interval (int, optional): The interval in seconds for the slideshow rotation.
-                                  Only used if 'enable' is True. Must be a positive integer bigger/equal to 5.
+        enable (bool, optional): True to activate slideshow, False to deactivate. Defaults to None.
+        interval (int, optional): The interval in seconds for the slideshow rotation. Must be a positive integer (min 5 seconds). Defaults to None.
+        random_order (bool, optional): True for random order, False for sequential order. Defaults to None.
     """
-
     config_file_path = _get_config_path()
     current_config = _read_config()
 
-    original_slideshow_active = current_config['slideshow_active']
-    original_slideshow_interval = current_config['slideshow_interval']
+    changes_made = False
 
-    if enable:
-        current_config['slideshow_active'] = True
-        sys.stderr.write("Slideshow has been activated.")
+    if enable is not None:
+        if current_config['slideshow_active'] != enable:
+            current_config['slideshow_active'] = enable
+            sys.stderr.write(f"Slideshow active status set to: {enable}\n")
+            changes_made = True
 
-        if interval is not None:
-            if not isinstance(interval, int) or interval <= 0:
-                sys.stderr.write("Warning: Invalid interval provided. Interval must be a positive integer. Using previous or default interval.\n")
-            elif interval < 5:
-                sys.stderr.write("Warning: Provided interval is too short. Setting minimum 5 seconds.\n")
+    if interval is not None:
+        if not isinstance(interval, int) or interval <= 0:
+            sys.stderr.write("Warning: Invalid interval provided. Interval must be a positive integer. Setting not updated.\n")
+        elif interval < 5:
+            sys.stderr.write("Warning: Provided interval is too short. Setting minimum 5 seconds.\n")
+            if current_config['slideshow_interval'] != 5:
                 current_config['slideshow_interval'] = 5
-            else:
-                current_config['slideshow_interval'] = interval
-                sys.stderr.write(f"Slideshow interval set to {current_config['slideshow_interval']} seconds.\n")
-        else:
-            sys.stderr.write(f"No new interval provided. Using current interval: {current_config['slideshow_interval']} seconds.\n")
-    
-    elif not enable:
-        current_config['slideshow_active'] = False
-        sys.stderr.write("Slideshow has been deactivated.")
+                changes_made = True
+        elif current_config['slideshow_interval'] != interval:
+            current_config['slideshow_interval'] = interval
+            sys.stderr.write(f"Slideshow interval set to {interval} seconds.\n")
+            changes_made = True
 
-    if (original_slideshow_active != current_config['slideshow_active'] or original_slideshow_interval != current_config['slideshow_interval']):
+    if random_order is not None:
+        if current_config['slideshow_random_order'] != random_order:
+            current_config['slideshow_random_order'] = random_order
+            sys.stderr.write(f"Slideshow order set to: {'RANDOM' if random_order else 'SEQUENTIAL'}\n")
+            changes_made = True
+
+    if changes_made:
         _write_config(current_config, config_file_path)
-        sys.stderr.write("Configuration updated.\n")
+        sys.stderr.write("Slideshow configuration updated.\n")
     else:
-        sys.stderr.write("Slideshow state and interval already as requested. No configuration change needed.\n")
+        sys.stderr.write("No changes made to slideshow configuration.\n")
 
 
 def set_wallpaper(path: str) -> None:
