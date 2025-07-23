@@ -53,6 +53,12 @@ def main():
         help='The absolute path to the wallpaper image file.'
     )
 
+    set_parser.add_argument(
+    '--monitor',
+    type=str,
+    help="Target monitor(s) by number (e.g., '0', '1-3', '0,2')."
+    )
+
     # --- Command: set-next ---
     set_next_parser = subparsers.add_parser(
         'set-next',
@@ -179,7 +185,7 @@ def main():
 
     # Beautiful if section :D
     if args.command == 'set':
-        set_wallpaper(args.path)
+        set_wallpaper(args.path, monitor_target=args.monitor)
 
     elif args.command == 'set-next':
         set_next_wallpaper()
