@@ -4,6 +4,7 @@ import re
 import threading
 import random
 import sys
+import json
 from config import _read_config, _write_config, _get_config_path, DEFAULT_CONFIG_STRUCTURE
 
 #GLOBAL
@@ -78,59 +79,29 @@ def _get_current_wallpaper_path() -> str:
         return ""
 
 
-def _get_monitor_info() -> list[dict]:
+def _get_monitor_info() -> dict[int, str]:
     """
     Purpose:
-        Executes 'hyprctl monitors all' and parses its output to get detailed
-        information about all connected monitors.
+        Executes 'hyprctl monitors all -j' and decodes its JSON formatted output to get
+        a key-value pair (id: name) about all connected monitors.
 
     Returns:
-        list[dict]: A list of dictionaries, where each dictionary represents a monitor
-                    and contains its parsed properties (e.g., 'name', 'resolution',
-                    'active', 'primary', 'description').
-                    Returns an empty list if hyprctl is not found or output cannot be parsed.
+        dict: A dictionary where each key represents a monitor's ID
+                    and each value their name.
+                    Returns an empty dict object if hyprctl is not found or output cannot be parsed.
     """
-
-    monitor_info = []
 
     try:
         result = subprocess.run(
-            ['hyprctl', 'monitors', 'all'],
+            ['hyprctl', 'monitors', 'all', '-j'], # -j for json format
             capture_output=True,
             text=True,
             check=True
         )
-        output = result.stdout.strip()
-
-        monitor_blocks_raw = re.split(r'\n\nMonitor ', 'Monitor ' + output)
-
-        monitor_blocks = [block.strip() for block in monitor_blocks_raw if block.strip()]
-
-        for block in monitor_blocks:
-            monitor_data = {}
-            lines = block.split('\n')
-
-            if lines:
-                first_line = lines[0].strip()
-                name_match = re.match(r'(.+?)( \(ID \d+\))?:', first_line)
-                if name_match:
-                    monitor_data['name'] = name_match.group(1).strip()
-                else:
-                    monitor_data['name'] = first_line.split(':', 1)[0].strip()
-
-                lines = lines[1:]
-
-            for line in lines:
-                line = line.strip()
-                if ': ' in line:
-                    key, value = line.split(': ', 1)
-                    key = key.strip().lower().replace(' ', '_')
-                    monitor_data[key] = value.strip()
-
-            if 'name' in monitor_data and monitor_data['name']:
-                monitor_info.append(monitor_data)
-            else:
-                sys.stderr.write(f"Warning: Could not parse a valid monitor name from block, skipping:\n{block}\n")
+        output = json.loads(result.stdout)
+        monitors = {}
+        for monitor in output:
+            monitors[monitor["id"]] = monitor["name"]
 
     except FileNotFoundError:
         sys.stderr.write("Error: 'hyprctl' command not found. Is Hyprland installed and in your PATH?\n")
@@ -143,7 +114,7 @@ def _get_monitor_info() -> list[dict]:
         sys.stderr.write(f"An unexpected error occurred while parsing monitor info: {e}\n")
         return []
 
-    return monitor_info
+    return monitors
 
 
 def _slideshow_loop_thread_target() -> None:
@@ -322,6 +293,35 @@ def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bo
     else:
         sys.stderr.write("No changes made to slideshow configuration.\n")
 
+def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
+    """
+    Purpose:
+        Unloads preloaded wallpapers from memory by executing
+        the command 'hyprctl hyprpaper unload ``'.
+
+    Arguments:
+        wallpaper (str): The absolute path to the wallpaper image file or one of the following values:
+            - all: All preloaded wallpapers.
+            - unset: Preloaded wallpapers that are currently not in use.
+
+    Usage:
+        - _unload_preloaded_wallpapers("path/to/image/file.type")
+        - _unload_preloaded_wallpapers(all)
+        - _unload_preloaded_wallpapers(unset)
+    """
+    command_unload = [
+        "hyprctl",
+        "hyprpaper",
+        "unload",
+        wallpaper
+    ]
+    subprocess.run(
+        command_unload,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8"
+    )
 
 def set_wallpaper(path: str, monitor_target: str = None) -> None:
     """
@@ -366,8 +366,9 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
             text=True,
             encoding='utf-8'
         )
-
         sys.stderr.write(f"Wallpaper '{path}' preloaded successfully.\n")
+
+        _unload_preloaded_wallpapers("unset") # unload unused wallpapers
 
     except subprocess.CalledProcessError as e:
         sys.stderr.write(f"Error preloading wallpaper with hyprctl:\n")
@@ -385,22 +386,18 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
         sys.stderr.write(f"An unexpected error occurred during wallpaper preloading: {e}\n")
         return
 
+    available_monitors = _get_monitor_info()
+
     if monitor_target:
         sys.stderr.write(f"Monitor target specified: '{monitor_target}'. Processing...\n")
-
-        available_monitors = _get_monitor_info()
 
         if not available_monitors:
             sys.stderr.write("Error: Could not retrieve monitor information. Cannot set wallpaper on specific monitors.\n")
             return
+        
+        sys.stderr.write(f"Detected monitors and their indices: {available_monitors}\n")
 
-        monitor_name_map = {
-            i: monitor['name']
-            for i, monitor in enumerate(available_monitors)
-        }
-        sys.stderr.write(f"Detected monitors and their indices: {monitor_name_map}\n")
-
-        target_monitors_names = []
+        target_monitor_names = set()
 
         parts = monitor_target.split(',')
         for part in parts:
@@ -418,11 +415,12 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                     if start > end:
                         start, end = end, start
 
-                    for i in range(start, end + 1):
-                        if i in monitor_name_map:
-                            target_monitors_names.append(monitor_name_map[i])
+                    for monitor_id in range(start, end + 1):
+                        monitor_name = available_monitors.get(monitor_id)
+                        if monitor_name:
+                            target_monitor_names.add(monitor_name)
                         else:
-                            sys.stderr.write(f"Warning: Monitor index {i} (from range '{part}') not found. Skipping.\n")
+                            sys.stderr.write(f"Warning: Monitor index {monitor_id} (from range '{part}') not found. Skipping.\n")
                 except ValueError:
                     sys.stderr.write(f"Warning: Invalid monitor range format '{part}'. Skipping this part.\n")
                 
@@ -430,11 +428,12 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                     sys.stderr.write(f"An unexpected error occurred parsing range '{part}': {e}. Skipping.\n")
             else:
                 try:
-                    idx = int(part)
-                    if idx in monitor_name_map:
-                        target_monitors_names.append(monitor_name_map[idx])
+                    monitor_id = int(part)
+                    monitor_name = available_monitors.get(monitor_id)
+                    if monitor_name:
+                        target_monitor_names.add(monitor_name)
                     else:
-                        sys.stderr.write(f"Warning: Monitor index {idx} not found. Skipping.\n")
+                        sys.stderr.write(f"Warning: Monitor index {monitor_id} not found. Skipping.\n")
                 
                 except ValueError:
                     sys.stderr.write(f"Warning: Invalid monitor index format '{part}'. Skipping this part.\n")
@@ -442,18 +441,16 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                 except Exception as e:
                     sys.stderr.write(f"An unexpected error occurred parsing index '{part}': {e}. Skipping.\n")
 
-        target_monitors_names = list(dict.fromkeys(target_monitors_names))
-
-        if not target_monitors_names:
+        if not target_monitor_names:
             sys.stderr.write("Error: No valid monitors identified from target string. Wallpaper not set.\n")
             return
 
-        for mon_name in target_monitors_names:
+        for monitor_name in target_monitor_names:
             command_wallpaper_specific = [
                 "hyprctl",
                 "hyprpaper",
                 "wallpaper",
-                f"{mon_name},{wallpaper_path.as_posix()}"
+                f"{monitor_name},{wallpaper_path.as_posix()}"
             ]
             try:
                 subprocess.run(
@@ -463,46 +460,47 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                     text=True,
                     encoding='utf-8'
                 )
-                sys.stderr.write(f"Successfully set wallpaper on monitor '{mon_name}': {path}\n")
+                sys.stderr.write(f"Successfully set wallpaper on monitor '{monitor_name}': {path}\n")
 
             except subprocess.CalledProcessError as e:
-                sys.stderr.write(f"Error setting wallpaper on monitor '{mon_name}' with hyprctl:\n")
+                sys.stderr.write(f"Error setting wallpaper on monitor '{monitor_name}' with hyprctl:\n")
                 sys.stderr.write(f"  Command: {' '.join(e.cmd)}\n")
                 sys.stderr.write(f"  Exit Code: {e.returncode}\n")
                 sys.stderr.write(f"  hyprctl stdout: {e.stdout}\n")
                 sys.stderr.write(f"  hyprctl stderr: {e.stderr}\n")
 
             except Exception as e:
-                sys.stderr.write(f"An unexpected error occurred during wallpaper setting on '{mon_name}': {e}\n")
+                sys.stderr.write(f"An unexpected error occurred during wallpaper setting on '{monitor_name}': {e}\n")
 
     else:
-        command_wallpaper = [
-            "hyprctl",
-            "hyprpaper",
-            "wallpaper",
-            f"{wallpaper_path.as_posix()}"
-        ]
-        try:
-            subprocess.run(
-                command_wallpaper,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding='utf-8'
-            )
-            sys.stderr.write(f"Successfully set wallpaper globally to '{path}'.\n")
+        for monitor_name in available_monitors.values():
+            command_wallpaper = [
+                "hyprctl",
+                "hyprpaper",
+                "wallpaper",
+                f"{monitor_name},{wallpaper_path.as_posix()}"
+            ]
+            try:
+                subprocess.run(
+                    command_wallpaper,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8'
+                )
+                sys.stderr.write(f"Successfully set wallpaper for all monitors to '{path}'.\n")
 
-        except subprocess.CalledProcessError as e:
-            sys.stderr.write(f"Error setting wallpaper globally with hyprctl:\n")
-            sys.stderr.write(f"  Command: {' '.join(e.cmd)}\n")
-            sys.stderr.write(f"  Exit Code: {e.returncode}\n")
-            sys.stderr.write(f"  hyprctl stdout: {e.stdout}\n")
-            sys.stderr.write(f"  hyprctl stderr: {e.stderr}\n")
-            return
-        
-        except Exception as e:
-            sys.stderr.write(f"An unexpected error occurred during global wallpaper setting: {e}\n")
-            return
+            except subprocess.CalledProcessError as e:
+                sys.stderr.write(f"Error setting wallpaper for all monitors with hyprctl:\n")
+                sys.stderr.write(f"  Command: {' '.join(e.cmd)}\n")
+                sys.stderr.write(f"  Exit Code: {e.returncode}\n")
+                sys.stderr.write(f"  hyprctl stdout: {e.stdout}\n")
+                sys.stderr.write(f"  hyprctl stderr: {e.stderr}\n")
+                return
+            
+            except Exception as e:
+                sys.stderr.write(f"An unexpected error occurred during all-monitors wallpaper setting: {e}\n")
+                return
 
 
     #CONFIG UPDATE
@@ -607,6 +605,7 @@ def set_random_wallpaper() -> None:
     config = _read_config()
 
     available_wallpapers = _get_all_available_wallpapers()
+    available_wallpapers.remove(_get_current_wallpaper_path()) # avoid current wallpaper
 
     if not available_wallpapers:
         sys.stderr.write("Error: No available wallpapers found in managed sources to set randomly.\n")

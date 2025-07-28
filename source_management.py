@@ -19,7 +19,7 @@ def _add_managed_source(path: str) -> None:
     if path not in current_config['managed_sources']:
         current_config['managed_sources'].append(path)
         _write_config(current_config, config_file_path)
-
+        sys.stderr.write("Wallpaper was added successfully.\n")
     else:
         sys.stderr.write("Wallpaper has already been added.\n")
 
@@ -39,7 +39,7 @@ def _remove_managed_source(path: str) -> None:
     if path in current_config['managed_sources']:
         current_config['managed_sources'].remove(path)
         _write_config(current_config, config_file_path)
-
+        sys.stderr.write("Wallpaper was removed successfully.\n")
     else:
         sys.stderr.write("Wallpaper does not exist.\n")
 

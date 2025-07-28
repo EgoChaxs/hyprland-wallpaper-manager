@@ -1,6 +1,7 @@
 import argparse
 import sys
 import time
+import os
 
 from config import initialise_json, _read_config, _get_config_path, _write_config
 from source_management import (
@@ -179,13 +180,27 @@ def main():
         help='Immediately stop the running slideshow thread.'
     )
 
+    # --- DEBUGGING START ---
+    #sys.argv = ["main.py", "set", "/home/karizma/Pictures/anime-girl-witch-2k+.png"]#, "--monitor", "0"]
+    #sys.argv = ["main.py", "set", "~/Pictures/dark-japanese-style-4k.jpeg"]#, "--monitor", "0"]
+    # --- DEBUGGING END ---
 
     # --- Parse the arguments ---
     args = parser.parse_args()
 
     # Beautiful if section :D
     if args.command == 'set':
-        set_wallpaper(args.path, monitor_target=args.monitor)
+        # check if user is trying to use a source from the sources list
+        wallpaper_path = args.path.strip()
+        if wallpaper_path.isdigit():
+            source_number = int(wallpaper_path) # not index, starts at 1
+            available_sources = list_sources()
+            if source_number <= 0 or source_number > len(available_sources):
+                sys.stderr.write(f"Error: The number you entered is outside of range. The number of sources is {len(available_sources)}.\n")
+            else:
+                set_wallpaper(available_sources[source_number - 1], monitor_target=args.monitor)
+        else:
+            set_wallpaper(wallpaper_path, monitor_target=args.monitor)
 
     elif args.command == 'set-next':
         set_next_wallpaper()

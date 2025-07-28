@@ -1,0 +1,1 @@
+##  Hyprland Wallpaper Changer
