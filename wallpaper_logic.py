@@ -293,6 +293,7 @@ def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bo
     else:
         sys.stderr.write("No changes made to slideshow configuration.\n")
 
+
 def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
     """
     Purpose:
@@ -322,6 +323,7 @@ def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
         text=True,
         encoding="utf-8"
     )
+
 
 def set_wallpaper(path: str, monitor_target: str = None) -> None:
     """

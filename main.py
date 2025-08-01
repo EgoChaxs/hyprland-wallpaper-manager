@@ -8,7 +8,8 @@ from source_management import (
     _add_managed_source,
     _remove_managed_source,
     list_sources,
-    clean_invalid_sources
+    clean_invalid_sources,
+    move_source
 )
 from wallpaper_logic import (
     set_wallpaper,
@@ -98,6 +99,24 @@ def main():
         'path',
         type=str,
         help='The absolute path to the directory or file to remove.'
+    )
+
+    # --- Command: move-source ---
+    move_source_parser = subparsers.add_parser(
+        'move-source',
+        help='Changes position of specified source to the specified index.'
+    )
+
+    move_source_parser.add_argument(
+        'source_index',
+        type=int,
+        help='Index of source to be moved.'
+    )
+
+    move_source_parser.add_argument(
+        'source_new_pos',
+        type=int,
+        help='Index of source new position (Negative Index -> Position 0, Index out of range -> Last position).'
     )
 
     # --- Command: get-curr ---
@@ -216,6 +235,9 @@ def main():
 
     elif args.command == 'remove-source':
         _remove_managed_source(args.path)
+
+    elif args.command == 'move_source':
+        move_source(args.source_index, args.source_new_pos)
 
     elif args.command == 'get-curr':
         print(_get_current_wallpaper_path())

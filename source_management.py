@@ -93,10 +93,51 @@ def clean_invalid_sources() -> None:
         sys.stderr.write("No invalid sources found.\n")
 
 
-def place_source_ahead(wallpaper_to_move: str, wallpaper_to_precede: str) -> None:
-    # For another time :D
-    pass
+def move_source(wallpaper_to_move_index: int, wallpaper_position: int) -> None:
+    """
+    Purpose:
+        Moves a wallpaper source (directory or file path) to a desired position
+        within the 'managed_sources' list in the configuration.
+        This reordering affects the sequence in which wallpapers are processed
+        for 'set-next', 'set-prev', and sequential slideshows.
 
-def place_source_before(wallpaper_to_move: str, wallpaper_to_precede: str) -> None:
-    # For another another time :D 
-    pass
+    Arguments:
+        wallpaper_to_move_index (int): The current 0-based index of the wallpaper source
+                                       to be moved.
+        wallpaper_position (int): The 0-based index of the desired new position for the source.
+                                  If less than 0, it moves to the beginning.
+                                  If greater than the number of available sources, it moves to the end.
+    """
+    config_file_path = _get_config_path()
+    config = _read_config()
+    managed_sources = config.get('managed_sources', []) 
+
+    if not managed_sources:
+        sys.stderr.write("Error: No managed wallpaper sources configured. Please add sources first.\n")
+        return
+
+    if not (0 <= wallpaper_to_move_index < len(managed_sources)):
+        sys.stderr.write(f"Error: Source index to move ({wallpaper_to_move_index}) is out of range. "
+                         f"Valid indices are 0 to {len(managed_sources) - 1}.\n")
+        return
+
+    wallpaper_to_be_moved = managed_sources.pop(wallpaper_to_move_index)
+    sys.stderr.write(f"Removed '{wallpaper_to_be_moved}' from index {wallpaper_to_move_index}.\n")
+
+    final_insert_position = wallpaper_position
+
+    if final_insert_position < 0:
+        final_insert_position = 0
+        sys.stderr.write(f"Adjusting target position to beginning (0) as {wallpaper_position} is negative.\n")
+
+    elif final_insert_position > len(managed_sources):
+        final_insert_position = len(managed_sources)
+        sys.stderr.write(f"Adjusting target position to end ({len(managed_sources)}) as {wallpaper_position} is too large.\n")
+
+    managed_sources.insert(final_insert_position, wallpaper_to_be_moved)
+    sys.stderr.write(f"Inserted '{wallpaper_to_be_moved}' at new index {final_insert_position}.\n")
+
+    config['managed_sources'] = managed_sources
+    _write_config(config, config_file_path)
+
+    sys.stderr.write("Managed wallpaper sources reordered successfully and saved to configuration.\n")
