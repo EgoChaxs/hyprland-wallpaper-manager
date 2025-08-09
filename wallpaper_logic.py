@@ -323,6 +323,7 @@ def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
         text=True,
         encoding="utf-8"
     )
+    sys.stderr.write("Unloaded preloaded wallpapers from memory.\n")
 
 
 def set_wallpaper(path: str, monitor_target: str = None) -> None:

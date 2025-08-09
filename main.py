@@ -1,7 +1,5 @@
 import argparse
 import sys
-import time
-import os
 
 from config import initialise_json, _read_config, _get_config_path, _write_config
 from source_management import (
@@ -200,7 +198,7 @@ def main():
     )
 
     # --- DEBUGGING START ---
-    #sys.argv = ["main.py", "set", "/home/karizma/Pictures/anime-girl-witch-2k+.png"]#, "--monitor", "0"]
+    #sys.argv = ["main.py", "move-source", "2", "0"]#, "--monitor", "0"]
     #sys.argv = ["main.py", "set", "~/Pictures/dark-japanese-style-4k.jpeg"]#, "--monitor", "0"]
     # --- DEBUGGING END ---
 
@@ -236,7 +234,7 @@ def main():
     elif args.command == 'remove-source':
         _remove_managed_source(args.path)
 
-    elif args.command == 'move_source':
+    elif args.command == 'move-source':
         move_source(args.source_index, args.source_new_pos)
 
     elif args.command == 'get-curr':
