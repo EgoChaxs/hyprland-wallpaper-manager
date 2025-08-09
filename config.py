@@ -7,7 +7,8 @@ DEFAULT_CONFIG_STRUCTURE = {
     "current_wallpaper": None,
     "slideshow_active": False,
     "slideshow_interval": None,
-    "slideshow_random_order": True
+    "slideshow_random_order": True,
+    "slideshow_index": 0
 }
 
 def _get_config_path() -> pathlib.Path:

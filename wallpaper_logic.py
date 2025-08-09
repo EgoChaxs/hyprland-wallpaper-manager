@@ -1,6 +1,5 @@
 import pathlib
 import subprocess
-import re
 import threading
 import random
 import sys
@@ -10,7 +9,10 @@ from config import _read_config, _write_config, _get_config_path, DEFAULT_CONFIG
 #GLOBAL
 _slideshow_stop_event = threading.Event()
 _slideshow_thread: threading.Thread = None
-_current_slideshow_index: int = 0
+
+#GLOBAL but it reads from file
+current_config = _read_config()
+_current_slideshow_index = current_config.get('slideshow_index', 0)
 
 SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
 
@@ -123,71 +125,59 @@ def _slideshow_loop_thread_target() -> None:
              It continuously picks and sets wallpapers based on the configured interval
              and managed sources until a stop signal is received.
     """
-
     sys.stderr.write("Slideshow thread started.\n")
 
-    #to avoid setting the same wallpaper (immediate repeats if small list)
+    global current_config
+    global _current_slideshow_index
+    config_file_path = _get_config_path()
     last_wallpaper_path = ""
 
-    while not _slideshow_stop_event.is_set():
+    try:
+        while not _slideshow_stop_event.is_set():
 
-        current_config = _read_config()
-        slideshow_active = current_config.get('slideshow_active', False)
-        slideshow_interval = current_config.get('slideshow_interval', 30)
-        slideshow_random_order = current_config.get('slideshow_random_order', True)
-    
-    #Get wallpapers and ask user to add if there are none otherwise thread cannot continue
-        #thread running but slideshow is false -> stop thread
-        if not slideshow_active:
-            sys.stderr.write("Slideshow deactivated via config. Stopping thread.\n")
-            break
+            current_config = _read_config()
+            slideshow_active = current_config.get('slideshow_active', False)
+            slideshow_interval = current_config.get('slideshow_interval', 30)
+            slideshow_random_order = current_config.get('slideshow_random_order', True)
 
-        #get wallpapers
-        available_wallpapers = _get_all_available_wallpapers()
+            if not slideshow_active:
+                sys.stderr.write("Slideshow deactivated via config. Stopping thread.\n")
+                break
 
-        #if there are no wallpapers, we wait for user to add but we dont stop thread
-        if not available_wallpapers:
-            sys.stderr.write("No wallpapers found in managed sources. Waiting for wallpapers...\n")
-            _slideshow_stop_event.wait(slideshow_interval)
-            continue
+            available_wallpapers = _get_all_available_wallpapers()
 
-    #Wallpaper selection
-        next_wallpaper = None
+            if not available_wallpapers:
+                sys.stderr.write("No wallpapers found. Waiting...\n")
+                _slideshow_stop_event.wait(slideshow_interval)
+                continue
 
-        #RANDOM WALLPAPER SETTING
-        if slideshow_random_order:
-            #attempt to avoid repeats if number of wallpapers exceeds 1
-            if len(available_wallpapers) > 1:
-                potential_wallpapers = [wp for wp in available_wallpapers if wp != last_wallpaper_path]
-                
-                if potential_wallpapers:
-                    next_wallpaper = random.choice(potential_wallpapers)
-                else:
-                    next_wallpaper = random.choice(available_wallpapers)
-
-            else:
-                next_wallpaper = available_wallpapers[0]
-            
-            _current_slideshow_index = 0 #always start with first wallpaper for sequential when in random
-
-        #SEQUENTIAL WALLPAPER SETTING
-        else:
-            if _current_slideshow_index >= len(available_wallpapers) or _current_slideshow_index < 0:
+            # Pick next wallpaper
+            if slideshow_random_order:
+                potential = [wp for wp in available_wallpapers if wp != last_wallpaper_path]
+                next_wallpaper = random.choice(potential or available_wallpapers)
                 _current_slideshow_index = 0
 
-            next_wallpaper = available_wallpapers[_current_slideshow_index]
-            #increment index for next iteration + wrap around
-            _current_slideshow_index = (_current_slideshow_index + 1) % len(available_wallpapers)
+            else:
+                if 0 > _current_slideshow_index >= len(available_wallpapers):
+                    _current_slideshow_index = 0
+                next_wallpaper = available_wallpapers[_current_slideshow_index]
+                _current_slideshow_index = (_current_slideshow_index + 1) % len(available_wallpapers)
+                
+                current_config['slideshow_index'] = _current_slideshow_index
+                _write_config(current_config, config_file_path)
 
-        if next_wallpaper:
-            set_wallpaper(next_wallpaper)
-            last_wallpaper_path = next_wallpaper
-        else:
-            sys.stderr.write("Could not select a wallpaper. Make sure you have added wallpapers!\n")
+            # Set wallpaper
+            if next_wallpaper:
+                set_wallpaper(next_wallpaper)
+                last_wallpaper_path = next_wallpaper
 
-        _slideshow_stop_event.wait(slideshow_interval)
-    
-    sys.stderr.write("Slideshow thread stopped\n")
+            # Wait before next iteration
+            _slideshow_stop_event.wait(slideshow_interval)
+
+    except Exception as e:
+        sys.stderr.write(f"Slideshow thread error: {e}\n")
+    finally:
+        sys.stderr.write("Slideshow thread stopped.\n")
 
 
 def stop_slideshow() -> None:
@@ -219,31 +209,28 @@ def start_slideshow() -> None:
 
     global _slideshow_thread, _slideshow_stop_event, _current_slideshow_index
 
-    #make sure any existing slideshow thread is stopped
     if _slideshow_thread and _slideshow_thread.is_alive():
-        sys.stderr.write("Slideshow is already running. Stopping existing thread before restarting.\n")
+        sys.stderr.write("Slideshow already running. Restarting...\n")
         stop_slideshow()
 
-    #reset stop event for fresh start
     _slideshow_stop_event.clear()
-    #reset slideshow index just in case
     _current_slideshow_index = 0
 
     sys.stderr.write("Attempting to start slideshow...\n")
 
-    #read config to confirm slideshow is active
     current_config = _read_config()
+
     if not current_config.get('slideshow_active', False):
-        sys.stderr.write("Slideshow is not enabled in the configuration. Use 'toggle_slideshow(True)' first.\n")
+        sys.stderr.write("Slideshow is not enabled in config.\n")
         return
 
-    #create thread
-    _slideshow_thread = threading.Thread(target=_slideshow_loop_thread_target, name="SlideshowThread")
-    _slideshow_thread.daemon = True
-
-    #start thread
+    _slideshow_thread = threading.Thread(
+        target=_slideshow_loop_thread_target,
+        name="SlideshowThread",
+        daemon=False
+    )
     _slideshow_thread.start()
-    sys.stderr.write("Slideshow thread successfully started in background.\n")
+    sys.stderr.write("Slideshow thread successfully started.\n")
 
 
 def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bool = None) -> None:
