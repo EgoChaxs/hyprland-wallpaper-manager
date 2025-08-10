@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from hyperland import hyprland_setup
 from config import initialise_json, _read_config, _get_config_path, _write_config
 from source_management import (
     _add_managed_source,
@@ -29,7 +30,8 @@ def main():
     dispatches to the appropriate wallpaper management functions.
     """
 
-    # No config file, Program doomed.
+    #No hyprland no program. No config file no program.
+    hyprland_setup()
     initialise_json()
 
     parser = argparse.ArgumentParser(
