@@ -1,7 +1,8 @@
 import argparse
 import sys
 
-from config import initialise_json, _read_config, _get_config_path, _write_config
+from hyprpaper_module import hyprpaper_setup
+from config import initialise_json
 from source_management import (
     _add_managed_source,
     _remove_managed_source,
@@ -29,7 +30,8 @@ def main():
     dispatches to the appropriate wallpaper management functions.
     """
 
-    # No config file, Program doomed.
+    # No hyprland no program. No config file no program.
+    hyprpaper_setup()
     initialise_json()
 
     parser = argparse.ArgumentParser(
@@ -264,7 +266,7 @@ def main():
 
         elif args.slideshow_command == 'interval':
             toggle_slideshow(interval=args.seconds)
-            
+
             if _slideshow_thread and _slideshow_thread.is_alive():
                 sys.stdout.write("Note: If slideshow is running, restart it ('slideshow stop' then 'slideshow start') for the new interval to take effect.\n")
 

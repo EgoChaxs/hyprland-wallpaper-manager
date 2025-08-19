@@ -1,11 +1,10 @@
 import sys
 import pathlib
-from config import _read_config, _write_config, _get_config_path, DEFAULT_CONFIG_STRUCTURE
-from wallpaper_logic import _get_all_available_wallpapers
+from config import _read_config, _write_config, _get_config_path
 
 def _add_managed_source(path: str) -> None:
     """
-    Purpose: 
+    Purpose:
         Adds a path (wallpaper) to config.json, 'managed_sources' list.
         Handles: Prevents adding duplicate paths (wallpaper) to config.json.
 
@@ -110,7 +109,7 @@ def move_source(wallpaper_to_move_index: int, wallpaper_position: int) -> None:
     """
     config_file_path = _get_config_path()
     config = _read_config()
-    managed_sources = config.get('managed_sources', []) 
+    managed_sources = config.get('managed_sources', [])
 
     if not managed_sources:
         sys.stderr.write("Error: No managed wallpaper sources configured. Please add sources first.\n")

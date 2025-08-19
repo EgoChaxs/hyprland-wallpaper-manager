@@ -4,11 +4,11 @@ import threading
 import random
 import sys
 import json
-from config import _read_config, _write_config, _get_config_path, DEFAULT_CONFIG_STRUCTURE
+from config import _read_config, _write_config, _get_config_path
 
 #GLOBAL
-_slideshow_stop_event = threading.Event()
-_slideshow_thread: threading.Thread = None
+_slideshow_stop_event: threading.Event = threading.Event()
+_slideshow_thread: threading.Thread | None = None
 
 #GLOBAL but it reads from file
 current_config = _read_config()
@@ -107,14 +107,14 @@ def _get_monitor_info() -> dict[int, str]:
 
     except FileNotFoundError:
         sys.stderr.write("Error: 'hyprctl' command not found. Is Hyprland installed and in your PATH?\n")
-        return []
+        return {}
     except subprocess.CalledProcessError as e:
         sys.stderr.write(f"Error running 'hyprctl monitors all': {e}\n")
         sys.stderr.write(f"Stderr: {e.stderr}\n")
-        return []
+        return {}
     except Exception as e:
         sys.stderr.write(f"An unexpected error occurred while parsing monitor info: {e}\n")
-        return []
+        return {}
 
     return monitors
 
@@ -162,7 +162,7 @@ def _slideshow_loop_thread_target() -> None:
                     _current_slideshow_index = 0
                 next_wallpaper = available_wallpapers[_current_slideshow_index]
                 _current_slideshow_index = (_current_slideshow_index + 1) % len(available_wallpapers)
-                
+
                 current_config['slideshow_index'] = _current_slideshow_index
                 _write_config(current_config, config_file_path)
 
@@ -233,7 +233,7 @@ def start_slideshow() -> None:
     sys.stderr.write("Slideshow thread successfully started.\n")
 
 
-def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bool = None) -> None:
+def toggle_slideshow(enable: bool|None = None, interval: int|None = None, random_order: bool|None = None) -> None:
     """
     Purpose:
         Manages all slideshow configuration settings (active state, interval, and order).
@@ -281,7 +281,7 @@ def toggle_slideshow(enable: bool = None, interval: int = None, random_order: bo
         sys.stderr.write("No changes made to slideshow configuration.\n")
 
 
-def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
+def _unload_preloaded_wallpapers(wallpaper: str) -> None:
     """
     Purpose:
         Unloads preloaded wallpapers from memory by executing
@@ -313,7 +313,7 @@ def _unload_preloaded_wallpapers(wallpaper: str) -> bool:
     sys.stderr.write("Unloaded preloaded wallpapers from memory.\n")
 
 
-def set_wallpaper(path: str, monitor_target: str = None) -> None:
+def set_wallpaper(path: str, monitor_target: str|None = None) -> None:
     """
     Purpose:
         Sets the specified wallpaper on one or more monitors using hyprpaper.
@@ -361,7 +361,7 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
         _unload_preloaded_wallpapers("unset") # unload unused wallpapers
 
     except subprocess.CalledProcessError as e:
-        sys.stderr.write(f"Error preloading wallpaper with hyprctl:\n")
+        sys.stderr.write("Error preloading wallpaper with hyprctl:\n")
         sys.stderr.write(f"  Command: {' '.join(e.cmd)}\n")
         sys.stderr.write(f"  Exit Code: {e.returncode}\n")
         sys.stderr.write(f"  hyprctl stdout: {e.stdout}\n")
@@ -384,7 +384,7 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
         if not available_monitors:
             sys.stderr.write("Error: Could not retrieve monitor information. Cannot set wallpaper on specific monitors.\n")
             return
-        
+
         sys.stderr.write(f"Detected monitors and their indices: {available_monitors}\n")
 
         target_monitor_names = set()
@@ -413,7 +413,7 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                             sys.stderr.write(f"Warning: Monitor index {monitor_id} (from range '{part}') not found. Skipping.\n")
                 except ValueError:
                     sys.stderr.write(f"Warning: Invalid monitor range format '{part}'. Skipping this part.\n")
-                
+
                 except Exception as e:
                     sys.stderr.write(f"An unexpected error occurred parsing range '{part}': {e}. Skipping.\n")
             else:
@@ -424,10 +424,10 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                         target_monitor_names.add(monitor_name)
                     else:
                         sys.stderr.write(f"Warning: Monitor index {monitor_id} not found. Skipping.\n")
-                
+
                 except ValueError:
                     sys.stderr.write(f"Warning: Invalid monitor index format '{part}'. Skipping this part.\n")
-                
+
                 except Exception as e:
                     sys.stderr.write(f"An unexpected error occurred parsing index '{part}': {e}. Skipping.\n")
 
@@ -481,13 +481,13 @@ def set_wallpaper(path: str, monitor_target: str = None) -> None:
                 sys.stderr.write(f"Successfully set wallpaper for all monitors to '{path}'.\n")
 
             except subprocess.CalledProcessError as e:
-                sys.stderr.write(f"Error setting wallpaper for all monitors with hyprctl:\n")
+                sys.stderr.write("Error setting wallpaper for all monitors with hyprctl:\n")
                 sys.stderr.write(f"  Command: {' '.join(e.cmd)}\n")
                 sys.stderr.write(f"  Exit Code: {e.returncode}\n")
                 sys.stderr.write(f"  hyprctl stdout: {e.stdout}\n")
                 sys.stderr.write(f"  hyprctl stderr: {e.stderr}\n")
                 return
-            
+
             except Exception as e:
                 sys.stderr.write(f"An unexpected error occurred during all-monitors wallpaper setting: {e}\n")
                 return
@@ -565,7 +565,7 @@ def set_previous_wallpaper() -> None:
     if len(available_wallpapers) == 1:
         sys.stderr.write("Only one wallpaper available. Cannot 'advance' to the next one.\n")
         return
-    
+
     current_wp_index = -1
     if current_wp:
         try:
