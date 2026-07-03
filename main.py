@@ -84,10 +84,18 @@ def main():
         'add-source',
         help='Adds a directory or file path to managed wallpaper sources.'
     )
+
     add_source_parser.add_argument(
-        'path',
+        "-l",
+        "--list",
+        nargs='+',
+        required=False
+    )
+
+    add_source_parser.add_argument(
+        '--path',
         type=str,
-        help='The absolute path to the directory or file to add.'
+        required=False
     )
 
     # --- Command: remove-source ---
@@ -230,11 +238,25 @@ def main():
     elif args.command == 'set-rand':
         set_random_wallpaper()
 
-    elif args.command == 'add-source':
-        _add_managed_source(args.path)
+    elif args.command in ('add-source', 'list'):
+        if args.list:
+            for wallpaper_path in args.list:
+                _add_managed_source(wallpaper_path.strip())
+        else:
+            _add_managed_source(args.path.strip())
 
     elif args.command == 'remove-source':
-        _remove_managed_source(args.path)
+        # check if user is trying to use a source from the sources list
+        wallpaper_path = args.path.strip()
+        if wallpaper_path.isdigit():
+            source_number = int(wallpaper_path) # not index, starts at 1
+            available_sources = list_sources()
+            if source_number <= 0 or source_number > len(available_sources):
+                sys.stderr.write(f"Error: The number you entered is outside of range. The number of sources is {len(available_sources)}.\n")
+            else:
+                _remove_managed_source(available_sources[source_number - 1])
+        else:
+            _remove_managed_source(wallpaper_path)
 
     elif args.command == 'move-source':
         move_source(args.source_index, args.source_new_pos)

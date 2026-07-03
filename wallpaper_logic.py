@@ -340,7 +340,7 @@ def set_wallpaper(path: str, monitor_target: str|None = None) -> None:
         return
 
     sys.stderr.write(f"Attempting to set wallpaper to '{path}'...\n")
-
+    """
     command_preload = [
         "hyprctl",
         "hyprpaper",
@@ -375,7 +375,7 @@ def set_wallpaper(path: str, monitor_target: str|None = None) -> None:
     except Exception as e:
         sys.stderr.write(f"An unexpected error occurred during wallpaper preloading: {e}\n")
         return
-
+    """
     available_monitors = _get_monitor_info()
 
     if monitor_target:
